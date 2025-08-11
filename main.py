@@ -43,8 +43,8 @@ def engineer_features(df: pd.DataFrame, n_lags: int = 5):
     for lag in range(1, n_lags + 1):
         data[f'lag_{lag}'] = data['close'].shift(lag)
 
-    data['rolling_mean_3'] = data['close'].rolling(window=7).mean()
-    data['rolling_mean_7'] = data['close'].rolling(window=10).mean()
+    data['rolling_mean_7'] = data['close'].rolling(window=7).mean()
+    data['rolling_mean_10'] = data['close'].rolling(window=10).mean()
     data['pct_change_1'] = data['close'].pct_change(1)
     data['volume_change_1'] = data['Volume'].pct_change(1)
 
