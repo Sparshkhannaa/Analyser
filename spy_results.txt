@@ -1,0 +1,129 @@
+
+======================================================================
+S&P 500 PREDICTION & STRATEGY ANALYSIS: SPY
+Period: 730 days (2.0 years)
+======================================================================
+
+Fetching price data for SPY...
+Price            Close        High         Low        Open     Volume
+Ticker             SPY         SPY         SPY         SPY        SPY
+Date                                                                 
+2023-10-18  419.371552  424.216342  418.279773  423.251293   93559800
+2023-10-19  415.686829  421.915858  415.004482  420.092974  121323000
+2023-10-20  410.578766  415.793987  410.471522  415.248097  123919900
+2023-10-23  409.867188  413.756686  407.274198  409.038596   92035100
+2023-10-24  412.957367  414.117389  410.140161  412.002046   78564200
+Price            Close        High         Low        Open     Volume
+Date                                                                 
+2023-10-18  419.371552  424.216342  418.279773  423.251293   93559800
+2023-10-19  415.686829  421.915858  415.004482  420.092974  121323000
+2023-10-20  410.578766  415.793987  410.471522  415.248097  123919900
+2023-10-23  409.867188  413.756686  407.274198  409.038596   92035100
+2023-10-24  412.957367  414.117389  410.140161  412.002046   78564200
+Price            Close        High         Low        Open     Volume
+Date                                                                 
+2023-10-18  419.371552  424.216342  418.279773  423.251293   93559800
+2023-10-19  415.686829  421.915858  415.004482  420.092974  121323000
+2023-10-20  410.578766  415.793987  410.471522  415.248097  123919900
+2023-10-23  409.867188  413.756686  407.274198  409.038596   92035100
+2023-10-24  412.957367  414.117389  410.140161  412.002046   78564200
+Got 501 rows
+
+Engineering features...
+Price            Close        High  ...  high_low_ratio      target
+Date                                ...                            
+2023-10-18  419.371552  424.216342  ...        0.183907  415.686829
+2023-10-19  415.686829  421.915858  ...        0.098728  410.578766
+2023-10-20  410.578766  415.793987  ...        0.020149  409.867188
+2023-10-23  409.867188  413.756686  ...        0.399999  412.957367
+2023-10-24  412.957367  414.117389  ...        0.708334  407.030548
+
+[5 rows x 41 columns]
+Close <class 'str'>
+High <class 'str'>
+Low <class 'str'>
+Open <class 'str'>
+Volume <class 'str'>
+close <class 'str'>
+high <class 'str'>
+low <class 'str'>
+volume <class 'str'>
+lag_1 <class 'str'>
+lag_2 <class 'str'>
+lag_3 <class 'str'>
+lag_4 <class 'str'>
+lag_5 <class 'str'>
+sma_7 <class 'str'>
+sma_14 <class 'str'>
+sma_21 <class 'str'>
+ema_12 <class 'str'>
+ema_26 <class 'str'>
+macd <class 'str'>
+macd_signal <class 'str'>
+macd_diff <class 'str'>
+rsi <class 'str'>
+bb_middle <class 'str'>
+bb_upper <class 'str'>
+bb_lower <class 'str'>
+bb_width <class 'str'>
+bb_position <class 'str'>
+volatility <class 'str'>
+atr <class 'str'>
+atr_14 <class 'str'>
+pct_change_1 <class 'str'>
+pct_change_5 <class 'str'>
+pct_change_10 <class 'str'>
+volume_change_1 <class 'str'>
+volume_sma_20 <class 'str'>
+volume_ratio <class 'str'>
+momentum_5 <class 'str'>
+momentum_10 <class 'str'>
+high_low_ratio <class 'str'>
+target <class 'str'>
+
+Created 31 features for training
+
+Training LSTM model...
+
+Training LSTM model (lookback=60 steps)...
+Training sequences: (276, 60, 31)
+Test sequences: (84, 60, 31)
+Training for up to 50 epochs...
+LSTM Training Complete!
+   Final RMSE: 45.8065, MAE: 45.0842
+   Trained for 29 epochs
+
+======================================================================
+TESTING ALL POSITION SIZING STRATEGIES...
+======================================================================
+
+Testing hybrid approaches with VOLATILITY_ADJUSTED strategy...
+
+================================================================================
+STRATEGY COMPARISON SUMMARY
+================================================================================
+Method                         Type                Return   Sharpe     Max DD     Win%
+--------------------------------------------------------------------------------
+binary                         Pure              -10.38%    -3.22   -12.17%    0.0% NO
+fixed                          Pure               -5.29%    -3.22    -6.25%    0.0% NO
+proportional                   Pure               -0.54%    -2.31    -0.76%    0.0% NO
+kelly                          Pure               -1.09%    -2.31    -1.51%    0.0% NO
+volatility_adjusted            Pure               -2.02%    -0.94    -5.17%    0.0% NO
+--------------------------------------------------------------------------------
+volatility_adjusted_hybrid_50_50 50/50 split         1.77%     3.92    -0.32%   34.5% NO
+volatility_adjusted_hybrid_30_70 70/30 split         0.27%     0.39    -1.21%   35.7% NO
+volatility_adjusted_hybrid_70_30 30/70 split         3.27%     2.50    -1.20%   40.5% NO *BEST*
+--------------------------------------------------------------------------------
+Buy & Hold (Benchmark)         100% Long          11.20%
+================================================================================
+
+WARNING: No strategy beat Buy & Hold (11.20%)
+   Best Strategy: VOLATILITY_ADJUSTED_HYBRID_70_30
+   Best Return: 3.27%
+   Underperformance: -7.93%
+
+RECOMMENDATION: Consider hybrid approaches or different market conditions.
+   This strategy may work better in sideways/bear markets.
+
+Plotting VOLATILITY_ADJUSTED_HYBRID_70_30 strategy results...
+Chart saved as charts/SPY_volatility_adjusted_hybrid_70_30_20251017_144031.png
