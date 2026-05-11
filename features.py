@@ -166,10 +166,10 @@ def engineer_features(
     data["dist_52w_high"] = (close - rolling_high) / rolling_high
     data["dist_52w_low"] = (close - rolling_low) / rolling_low
 
-    # Binary target: 1 if next-day close > today (any up day)
-    # Costs live in the backtest, not here — keeping target clean avoids class imbalance
-    next_close = close.shift(-1)
-    data["target"] = next_close.gt(close).astype(float).where(next_close.notna())
+    # Binary target: 1 if close 5 days from now > today
+    # 5-day horizon catches multi-day trends rather than noisy 1-day bounces
+    fwd_close = close.shift(-5)
+    data["target"] = fwd_close.gt(close).astype(float).where(fwd_close.notna())
 
     data = data.dropna()
 

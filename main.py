@@ -85,7 +85,7 @@ def main(
     ticker: str = "SPY",
     period: int = 1825,
     capital: float = 100_000.0,
-    threshold: float = 0.55,
+    threshold: float = 0.52,
 ) -> dict:
     print(f"\nFetching {period} days of {ticker} data...")
     prices = fetch_prices(ticker, period)
@@ -101,7 +101,7 @@ def main(
     print(f"  {len(signals)} predictions | {signals['signal'].sum()} long signals")
 
     print("Backtesting with transaction costs...")
-    bt = run_backtest(prices, signals, initial_capital=capital)
+    bt = run_backtest(prices, signals, initial_capital=capital, hold_days=5)
     metrics = compute_metrics(bt)
 
     _print_results(metrics, ticker, period)
