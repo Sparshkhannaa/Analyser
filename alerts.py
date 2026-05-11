@@ -9,6 +9,7 @@ load_dotenv()
 def send_telegram(message: str) -> bool:
     token = os.getenv("TELEGRAM_BOT_TOKEN", "")
     chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+    print(f"[telegram] token={'set' if token else 'MISSING'} chat_id={'set' if chat_id else 'MISSING'}")
     if not token or not chat_id:
         return False
     resp = requests.post(
