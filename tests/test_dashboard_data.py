@@ -39,3 +39,50 @@ def test_get_today_signals_returns_empty_when_no_csvs(tmp_path):
 
     assert df.empty
     assert date_str == ""
+
+
+def _seed_db(db_path: str) -> None:
+    """Helper: seed a test DB with positions and daily_log rows."""
+    import sqlite3
+    from db import init_db, open_position, close_position, log_daily
+    init_db(db_path)
+    p1 = open_position("NVDA", "2026-04-28", 198.0, 0.61, db_path)
+    close_position(p1, "2026-05-05", 206.0, "hold_expired", 4.04, db_path)
+    open_position("AMD", "2026-05-08", 448.0, 0.55, db_path)
+    log_daily("2026-05-05", 3, 1, 1, db_path)
+    log_daily("2026-05-08", 2, 1, 0, db_path)
+
+
+def test_get_closed_trades_returns_only_closed(tmp_path):
+    db = str(tmp_path / "test.db")
+    _seed_db(db)
+
+    from data import get_closed_trades
+    get_closed_trades.clear()
+    df = get_closed_trades(db_path=db)
+
+    assert len(df) == 1
+    assert df.iloc[0]["ticker"] == "NVDA"
+    assert df.iloc[0]["pnl_pct"] == pytest.approx(4.04)
+
+
+def test_get_last_run_returns_most_recent_date(tmp_path):
+    db = str(tmp_path / "test.db")
+    _seed_db(db)
+
+    from data import get_last_run
+    get_last_run.clear()
+    last = get_last_run(db_path=db)
+
+    assert last == "2026-05-08"
+
+
+def test_get_last_run_returns_none_when_no_log(tmp_path):
+    from db import init_db
+    from data import get_last_run
+
+    db = str(tmp_path / "empty.db")
+    init_db(db)
+    get_last_run.clear()
+
+    assert get_last_run(db_path=db) is None
