@@ -1,3 +1,8 @@
+import json
+import os
+from datetime import datetime, timezone
+
+import joblib
 import numpy as np
 import pandas as pd
 from xgboost import XGBClassifier
@@ -65,3 +70,32 @@ def walk_forward_predict(
 
     signals = pd.DataFrame(records).set_index("date")
     return signals, model
+
+
+MODEL_DIR = "models"
+
+
+def save_model(model: XGBClassifier, ticker: str) -> None:
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    joblib.dump(model, f"{MODEL_DIR}/{ticker}_xgb.pkl")
+    meta = {"trained_at": datetime.now(timezone.utc).isoformat()}
+    with open(f"{MODEL_DIR}/{ticker}_meta.json", "w") as f:
+        json.dump(meta, f)
+
+
+def load_model(ticker: str) -> XGBClassifier:
+    return joblib.load(f"{MODEL_DIR}/{ticker}_xgb.pkl")
+
+
+def model_is_stale(ticker: str, max_age_days: int = 7) -> bool:
+    pkl_path = f"{MODEL_DIR}/{ticker}_xgb.pkl"
+    meta_path = f"{MODEL_DIR}/{ticker}_meta.json"
+    if not os.path.exists(pkl_path) or not os.path.exists(meta_path):
+        return True
+    with open(meta_path) as f:
+        meta = json.load(f)
+    trained_at = datetime.fromisoformat(meta["trained_at"])
+    if trained_at.tzinfo is None:
+        trained_at = trained_at.replace(tzinfo=timezone.utc)
+    age = datetime.now(timezone.utc) - trained_at
+    return age.days > max_age_days

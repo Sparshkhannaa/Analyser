@@ -72,3 +72,50 @@ def test_walk_forward_returns_last_model(synthetic_prices, synthetic_vix):
 
     assert isinstance(model, XGBClassifier)
     assert hasattr(model, "feature_importances_")
+
+
+import json
+from datetime import datetime, timedelta, timezone
+
+
+def test_save_load_roundtrip(tmp_path, monkeypatch, synthetic_prices, synthetic_vix):
+    from model import save_model, load_model, train_xgb
+    monkeypatch.setattr("model.MODEL_DIR", str(tmp_path))
+
+    X, y = engineer_features(synthetic_prices, synthetic_vix)
+    model = train_xgb(X, y)
+    save_model(model, "TEST")
+
+    loaded = load_model("TEST")
+    preds_orig = model.predict_proba(X)[:, 1]
+    preds_load = loaded.predict_proba(X)[:, 1]
+    np.testing.assert_array_almost_equal(preds_orig, preds_load)
+
+
+def test_model_is_stale_missing(tmp_path, monkeypatch):
+    from model import model_is_stale
+    monkeypatch.setattr("model.MODEL_DIR", str(tmp_path))
+    assert model_is_stale("MISSING") is True
+
+
+def test_model_is_stale_fresh(tmp_path, monkeypatch):
+    from model import model_is_stale
+    monkeypatch.setattr("model.MODEL_DIR", str(tmp_path))
+
+    meta = {"trained_at": datetime.now(timezone.utc).isoformat()}
+    (tmp_path / "FRESH_xgb.pkl").write_text("dummy")
+    (tmp_path / "FRESH_meta.json").write_text(json.dumps(meta))
+
+    assert model_is_stale("FRESH") is False
+
+
+def test_model_is_stale_old(tmp_path, monkeypatch):
+    from model import model_is_stale
+    monkeypatch.setattr("model.MODEL_DIR", str(tmp_path))
+
+    old_time = datetime.now(timezone.utc) - timedelta(days=8)
+    meta = {"trained_at": old_time.isoformat()}
+    (tmp_path / "OLD_xgb.pkl").write_text("dummy")
+    (tmp_path / "OLD_meta.json").write_text(json.dumps(meta))
+
+    assert model_is_stale("OLD") is True
