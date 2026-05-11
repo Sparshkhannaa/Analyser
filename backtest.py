@@ -58,7 +58,7 @@ def compute_metrics(bt: pd.DataFrame, risk_free_rate: float = 0.0) -> dict:
     win_rate = float((trades["strategy_return"] > 0).mean()) if len(trades) > 0 else 0.0
 
     sharpe = (ann_return - risk_free_rate) / ann_vol if ann_vol > 1e-9 else 0.0
-    sortino = (ann_return - risk_free_rate) / ann_downside
+    sortino = (ann_return - risk_free_rate) / ann_downside if ann_downside > 1e-9 else 0.0
     calmar = ann_return / abs(max_drawdown) if max_drawdown < -1e-9 else 0.0
 
     return {

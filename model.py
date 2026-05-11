@@ -8,12 +8,17 @@ def train_xgb(X: pd.DataFrame, y: pd.Series) -> XGBClassifier:
     X_tr, X_val = X.iloc[:split], X.iloc[split:]
     y_tr, y_val = y.iloc[:split], y.iloc[split:]
 
+    neg = (y_tr == 0).sum()
+    pos = (y_tr == 1).sum()
+    scale_pos_weight = neg / pos if pos > 0 else 1.0
+
     model = XGBClassifier(
         n_estimators=500,
         max_depth=4,
         learning_rate=0.05,
         subsample=0.8,
         colsample_bytree=0.8,
+        scale_pos_weight=scale_pos_weight,
         eval_metric="auc",
         early_stopping_rounds=30,
         random_state=42,

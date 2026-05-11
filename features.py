@@ -166,9 +166,10 @@ def engineer_features(
     data["dist_52w_high"] = (close - rolling_high) / rolling_high
     data["dist_52w_low"] = (close - rolling_low) / rolling_low
 
-    # Binary target: 1 if next-day close > today * 1.001 (NaN on last row so dropna removes it)
+    # Binary target: 1 if next-day close > today (any up day)
+    # Costs live in the backtest, not here — keeping target clean avoids class imbalance
     next_close = close.shift(-1)
-    data["target"] = next_close.gt(close * 1.001).astype(float).where(next_close.notna())
+    data["target"] = next_close.gt(close).astype(float).where(next_close.notna())
 
     data = data.dropna()
 
