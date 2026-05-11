@@ -30,9 +30,15 @@ def walk_forward_predict(
     step_days: int = 63,
     threshold: float = 0.55,
 ) -> tuple[pd.DataFrame, XGBClassifier]:
+    n = len(X)
+    if n <= min_train_days:
+        raise ValueError(
+            f"Not enough data: {n} feature rows but min_train_days={min_train_days}. "
+            "Fetch more history (e.g. --period 1825) or reduce min_train_days."
+        )
+
     records = []
     model = None
-    n = len(X)
     start = min_train_days
 
     while start < n:
