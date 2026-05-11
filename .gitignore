@@ -183,3 +183,4 @@ cython_debug/
 models/
 signals/
 docs/
+paper_trading.db
