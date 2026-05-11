@@ -17,6 +17,7 @@ def send_telegram(message: str) -> bool:
         json={"chat_id": chat_id, "text": message, "parse_mode": "Markdown"},
         timeout=10,
     )
+    print(f"[telegram] status={resp.status_code} body={resp.text[:200]}")
     return resp.ok
 
 
