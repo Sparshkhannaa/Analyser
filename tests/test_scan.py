@@ -78,6 +78,7 @@ def test_regime_blocks_high_confidence_signal():
          patch("scan.fetch_vix", return_value=vix), \
          patch("scan.model_is_stale", return_value=False), \
          patch("scan.load_model", return_value=model), \
+         patch("scan.fetch_earnings_dates", return_value=pd.DatetimeIndex([])), \
          patch("scan.engineer_features_inference", return_value=_x_mock()):
         df = scan(["FAKE"], threshold=0.52)
 
@@ -95,6 +96,7 @@ def test_regime_passes_signal_when_in_uptrend():
          patch("scan.fetch_vix", return_value=vix), \
          patch("scan.model_is_stale", return_value=False), \
          patch("scan.load_model", return_value=model), \
+         patch("scan.fetch_earnings_dates", return_value=pd.DatetimeIndex([])), \
          patch("scan.engineer_features_inference", return_value=_x_mock()):
         df = scan(["FAKE"], threshold=0.52)
 
@@ -114,11 +116,12 @@ def test_scanner_output_columns():
          patch("scan.fetch_vix", return_value=vix), \
          patch("scan.model_is_stale", return_value=False), \
          patch("scan.load_model", return_value=model), \
+         patch("scan.fetch_earnings_dates", return_value=pd.DatetimeIndex([])), \
          patch("scan.engineer_features_inference", return_value=_x_mock()):
         df = scan(["T1", "T2"], threshold=0.52)
 
-    assert df.shape == (2, 6)
-    assert set(df.columns) == {"ticker", "prob", "signal", "regime_ok", "close", "sma_200"}
+    assert df.shape == (2, 7)
+    assert set(df.columns) == {"ticker", "prob", "signal", "regime_ok", "near_earnings", "close", "sma_200"}
 
 
 # ── CSV output ─────────────────────────────────────────────────────────────────
@@ -134,6 +137,7 @@ def test_scanner_csv_saved(tmp_path, monkeypatch):
          patch("scan.fetch_vix", return_value=vix), \
          patch("scan.model_is_stale", return_value=False), \
          patch("scan.load_model", return_value=model), \
+         patch("scan.fetch_earnings_dates", return_value=pd.DatetimeIndex([])), \
          patch("scan.engineer_features_inference", return_value=_x_mock()):
         main(tickers=["FAKE"], threshold=0.52)
 
@@ -157,6 +161,7 @@ def test_scanner_uses_cached_model():
          patch("scan.model_is_stale", return_value=False), \
          patch("scan.load_model", return_value=model) as mock_load, \
          patch("scan.walk_forward_predict") as mock_train, \
+         patch("scan.fetch_earnings_dates", return_value=pd.DatetimeIndex([])), \
          patch("scan.engineer_features_inference", return_value=_x_mock()):
         scan(["FAKE"], threshold=0.52)
 
@@ -177,6 +182,7 @@ def test_scanner_retrains_stale_model():
          patch("scan.engineer_features", return_value=(pd.DataFrame(), pd.Series())), \
          patch("scan.walk_forward_predict", return_value=(fake_signals, model)) as mock_train, \
          patch("scan.save_model") as mock_save, \
+         patch("scan.fetch_earnings_dates", return_value=pd.DatetimeIndex([])), \
          patch("scan.engineer_features_inference", return_value=_x_mock()):
         scan(["FAKE"], threshold=0.52)
 
@@ -198,6 +204,7 @@ def test_bad_ticker_skipped_gracefully():
          patch("scan.fetch_vix", return_value=_make_vix()), \
          patch("scan.model_is_stale", return_value=False), \
          patch("scan.load_model", return_value=_mock_model()), \
+         patch("scan.fetch_earnings_dates", return_value=pd.DatetimeIndex([])), \
          patch("scan.engineer_features_inference", return_value=_x_mock()):
         df = scan(["GOOD", "BAD"], threshold=0.52)
 

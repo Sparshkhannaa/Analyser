@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from backtest import compute_metrics, run_backtest
-from features import engineer_features, fetch_prices, fetch_vix
+from features import engineer_features, fetch_earnings_dates, fetch_prices, fetch_vix
 from model import walk_forward_predict
 
 
@@ -100,8 +100,12 @@ def main(
     signals, model = walk_forward_predict(X, y, threshold=threshold)
     print(f"  {len(signals)} predictions | {signals['signal'].sum()} long signals")
 
+    print("Fetching earnings dates...")
+    earnings_dates = fetch_earnings_dates(ticker)
+    print(f"  {len(earnings_dates)} earnings dates found — suppressing signals within ±2 days.")
+
     print("Backtesting with transaction costs...")
-    bt = run_backtest(prices, signals, initial_capital=capital, hold_days=5)
+    bt = run_backtest(prices, signals, initial_capital=capital, hold_days=5, earnings_dates=earnings_dates)
     metrics = compute_metrics(bt)
 
     _print_results(metrics, ticker, period)

@@ -10,8 +10,10 @@ import pandas as pd
 from features import (
     engineer_features,
     engineer_features_inference,
+    fetch_earnings_dates,
     fetch_prices,
     fetch_vix,
+    is_near_earnings,
 )
 from model import load_model, model_is_stale, save_model, walk_forward_predict
 
@@ -60,12 +62,15 @@ def scan(
             X_today = engineer_features_inference(prices, vix)
             prob = float(model.predict_proba(X_today)[:, 1][0])
             regime_ok, sma_200 = _compute_regime(prices)
-            signal = 1 if (prob >= threshold and regime_ok) else 0
+            earnings_dates = fetch_earnings_dates(ticker)
+            near_earnings = is_near_earnings(date.today(), earnings_dates)
+            signal = 1 if (prob >= threshold and regime_ok and not near_earnings) else 0
             results.append({
                 "ticker": ticker,
                 "prob": prob,
                 "signal": signal,
                 "regime_ok": regime_ok,
+                "near_earnings": near_earnings,
                 "close": float(prices["Close"].iloc[-1]),
                 "sma_200": sma_200,
             })
@@ -74,7 +79,7 @@ def scan(
             continue
 
     if not results:
-        return pd.DataFrame(columns=["ticker", "prob", "signal", "regime_ok", "close", "sma_200"])
+        return pd.DataFrame(columns=["ticker", "prob", "signal", "regime_ok", "near_earnings", "close", "sma_200"])
 
     return (
         pd.DataFrame(results)
@@ -90,12 +95,13 @@ def _print_results(df: pd.DataFrame, threshold: float) -> None:
     print(f"\n{'=' * 65}")
     print(f"  SCANNER — {today}  |  threshold: {threshold}  |  {n} tickers")
     print(f"{'=' * 65}")
-    print(f"  {'Ticker':<8} {'Prob':>6}  {'Signal':<8} {'Regime'}")
-    print(f"  {'-' * 7} {'-' * 6}  {'-' * 7} {'-' * 7}")
+    print(f"  {'Ticker':<8} {'Prob':>6}  {'Signal':<8} {'Regime':<8} {'Earnings'}")
+    print(f"  {'-' * 7} {'-' * 6}  {'-' * 7} {'-' * 7} {'-' * 8}")
     for _, row in df.iterrows():
         signal_str = "LONG" if row["signal"] == 1 else "-"
         regime_str = "YES" if row["regime_ok"] else "NO"
-        print(f"  {row['ticker']:<8} {row['prob']:>6.2f}  {signal_str:<8} {regime_str}")
+        earnings_str = "NEAR" if row["near_earnings"] else "-"
+        print(f"  {row['ticker']:<8} {row['prob']:>6.2f}  {signal_str:<8} {regime_str:<8} {earnings_str}")
     print(f"{'=' * 65}")
     print(f"  {longs} long signal{'s' if longs != 1 else ''}")
     print(f"{'=' * 65}\n")

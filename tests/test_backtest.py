@@ -94,3 +94,18 @@ def test_win_rate_between_zero_and_one(synthetic_prices, synthetic_vix):
     metrics = compute_metrics(bt)
 
     assert 0 <= metrics["win_rate"] <= 1
+
+
+def test_earnings_filter_suppresses_signals(synthetic_prices, synthetic_vix):
+    from backtest import run_backtest
+
+    prices, signals, _, _ = _make_backtest_inputs(synthetic_prices, synthetic_vix)
+
+    # Use all signal dates as earnings dates — should suppress everything
+    earnings_dates = pd.DatetimeIndex(signals.index)
+    bt_filtered = run_backtest(prices, signals, earnings_dates=earnings_dates, earnings_window=0)
+    bt_unfiltered = run_backtest(prices, signals)
+
+    filtered_trades = (bt_filtered["position_size"] > 0).sum()
+    unfiltered_trades = (bt_unfiltered["position_size"] > 0).sum()
+    assert filtered_trades < unfiltered_trades, "Earnings filter should suppress at least some signals"

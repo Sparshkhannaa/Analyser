@@ -81,3 +81,21 @@ def test_engineer_features_inference_index_after_training_data(synthetic_prices,
     assert X_infer.index[-1] >= X_train.index[-1], (
         "Inference row should be at or after last training row"
     )
+
+
+def test_is_near_earnings_within_window():
+    from features import is_near_earnings
+    earnings = pd.DatetimeIndex(["2024-05-10"])
+    assert is_near_earnings(pd.Timestamp("2024-05-11"), earnings, window=2) is True
+    assert is_near_earnings(pd.Timestamp("2024-05-08"), earnings, window=2) is True
+
+
+def test_is_near_earnings_outside_window():
+    from features import is_near_earnings
+    earnings = pd.DatetimeIndex(["2024-05-10"])
+    assert is_near_earnings(pd.Timestamp("2024-05-15"), earnings, window=2) is False
+
+
+def test_is_near_earnings_empty():
+    from features import is_near_earnings
+    assert is_near_earnings(pd.Timestamp("2024-05-10"), pd.DatetimeIndex([]), window=2) is False

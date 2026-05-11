@@ -8,6 +8,8 @@ def run_backtest(
     initial_capital: float = 100_000.0,
     cost_pct: float = 0.001,
     hold_days: int = 5,
+    earnings_dates: "pd.DatetimeIndex | None" = None,
+    earnings_window: int = 2,
 ) -> pd.DataFrame:
     all_dates = prices.index
 
@@ -16,11 +18,20 @@ def run_backtest(
     position_prob = pd.Series(0.0, index=all_dates)
     in_position_until = pd.Timestamp.min
 
+    near = set()
+    if earnings_dates is not None and len(earnings_dates) > 0:
+        for ed in earnings_dates:
+            ed = pd.Timestamp(ed).normalize()
+            for delta in range(-earnings_window, earnings_window + 1):
+                near.add(ed + pd.Timedelta(days=delta))
+
     for date in signals.index:
         if date not in all_dates:
             continue
         row = signals.loc[date]
         if row["signal"] != 1 or date <= in_position_until:
+            continue
+        if pd.Timestamp(date).normalize() in near:
             continue
         idx = all_dates.get_loc(date)
         end_idx = min(idx + hold_days - 1, len(all_dates) - 2)

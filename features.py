@@ -26,6 +26,26 @@ def fetch_vix(period_days: int = 1825) -> pd.DataFrame:
     return fetch_prices("^VIX", period_days)
 
 
+def fetch_earnings_dates(ticker: str) -> pd.DatetimeIndex:
+    """Return all known earnings dates for ticker (past + upcoming)."""
+    try:
+        t = yf.Ticker(ticker)
+        dates = t.earnings_dates
+        if dates is None or dates.empty:
+            return pd.DatetimeIndex([])
+        return pd.DatetimeIndex(dates.index.normalize().unique().tz_localize(None))
+    except Exception:
+        return pd.DatetimeIndex([])
+
+
+def is_near_earnings(date: pd.Timestamp, earnings_dates: pd.DatetimeIndex, window: int = 2) -> bool:
+    """Return True if date falls within window trading days of any earnings date."""
+    if earnings_dates.empty:
+        return False
+    date = pd.Timestamp(date).normalize()
+    return any(abs((date - e).days) <= window for e in earnings_dates)
+
+
 def _compute_adx(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
     prev_close = close.shift(1)
     tr = pd.concat(
