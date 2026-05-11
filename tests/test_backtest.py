@@ -38,8 +38,9 @@ def test_costs_reduce_returns():
 
     n = 100
     dates = pd.bdate_range("2022-01-01", periods=n)
+    opens = np.linspace(100, 120, n)
     prices = pd.DataFrame(
-        {"Open": np.linspace(100, 120, n), "Close": np.linspace(100, 120, n)},
+        {"Open": opens, "High": opens * 1.002, "Low": opens * 0.999, "Close": opens},
         index=dates,
     )
     signals = pd.DataFrame({"signal": 1, "prob": 0.7}, index=dates)
@@ -55,8 +56,11 @@ def test_zero_signal_holds_no_position():
 
     n = 50
     dates = pd.bdate_range("2022-01-01", periods=n)
+    opens = np.full(n, 100.0)
+    closes = np.linspace(100, 110, n)
     prices = pd.DataFrame(
-        {"Open": 100.0, "Close": np.linspace(100, 110, n)}, index=dates
+        {"Open": opens, "High": opens * 1.002, "Low": opens * 0.999, "Close": closes},
+        index=dates,
     )
     signals = pd.DataFrame({"signal": 0, "prob": 0.3}, index=dates)
 
@@ -109,3 +113,64 @@ def test_earnings_filter_suppresses_signals(synthetic_prices, synthetic_vix):
     filtered_trades = (bt_filtered["position_size"] > 0).sum()
     unfiltered_trades = (bt_unfiltered["position_size"] > 0).sum()
     assert filtered_trades < unfiltered_trades, "Earnings filter should suppress at least some signals"
+
+
+# ── Stop-loss ──────────────────────────────────────────────────────────────────
+
+def _make_crash_prices(n: int = 210) -> pd.DataFrame:
+    """Prices with a 6% intraday drop (Low) — triggers a 2% stop."""
+    dates = pd.bdate_range("2022-01-01", periods=n)
+    opens = np.full(n, 100.0)
+    closes = np.full(n, 93.0)
+    return pd.DataFrame({
+        "Open": opens,
+        "High": opens * 1.001,
+        "Low": closes * 0.99,   # Low ≈ 92 — below 2% stop at 98
+        "Close": closes,
+        "Volume": np.full(n, 1_000_000.0),
+    }, index=dates)
+
+
+def test_stop_loss_caps_loss():
+    """Stop at 2% yields a smaller loss than holding through a 7% daily drop."""
+    from backtest import run_backtest
+
+    prices = _make_crash_prices()
+    signals = pd.DataFrame(
+        {"signal": [1], "prob": [0.70]},
+        index=prices.index[200:201],
+    )
+    bt_stop = run_backtest(prices, signals, stop_loss_pct=0.02)
+    bt_none = run_backtest(prices, signals, stop_loss_pct=None)
+
+    assert bt_stop["cumulative"].iloc[-1] > bt_none["cumulative"].iloc[-1]
+
+
+def test_stop_loss_triggers_early_exit():
+    """When stop fires on day 1 of a 5-day hold, days 2-5 have zero position."""
+    from backtest import run_backtest
+
+    prices = _make_crash_prices()
+    signals = pd.DataFrame(
+        {"signal": [1], "prob": [0.70]},
+        index=prices.index[200:201],
+    )
+    bt = run_backtest(prices, signals, stop_loss_pct=0.02, hold_days=5)
+
+    active_days = int((bt["position_size"] > 0).sum())
+    assert active_days == 1
+
+
+def test_stop_loss_none_holds_full_period():
+    """Disabling stop-loss (None) keeps the position active for all hold_days."""
+    from backtest import run_backtest
+
+    prices = _make_crash_prices()
+    signals = pd.DataFrame(
+        {"signal": [1], "prob": [0.70]},
+        index=prices.index[200:201],
+    )
+    bt = run_backtest(prices, signals, stop_loss_pct=None, hold_days=5)
+
+    active_days = int((bt["position_size"] > 0).sum())
+    assert active_days == 5

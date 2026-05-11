@@ -8,14 +8,15 @@ def run_backtest(
     initial_capital: float = 100_000.0,
     cost_pct: float = 0.001,
     hold_days: int = 5,
+    stop_loss_pct: "float | None" = 0.02,
     earnings_dates: "pd.DatetimeIndex | None" = None,
     earnings_window: int = 2,
 ) -> pd.DataFrame:
     all_dates = prices.index
 
-    # Expand each signal across hold_days, non-overlapping
-    # Position size scales with confidence: (prob - 0.5) * 4, capped at 1.0
     position_prob = pd.Series(0.0, index=all_dates)
+    stop_exit = pd.Series(False, index=all_dates)
+    stop_ret = pd.Series(0.0, index=all_dates)
     in_position_until = pd.Timestamp.min
 
     near = set()
@@ -34,20 +35,43 @@ def run_backtest(
         if pd.Timestamp(date).normalize() in near:
             continue
         idx = all_dates.get_loc(date)
+        if idx + 1 >= len(all_dates):
+            continue
+        entry_price = float(prices["Open"].iloc[idx + 1])
+        stop_level = entry_price * (1 - stop_loss_pct) if stop_loss_pct else None
         end_idx = min(idx + hold_days - 1, len(all_dates) - 2)
-        position_prob.iloc[idx : end_idx + 1] = row["prob"]
-        in_position_until = all_dates[end_idx]
+        actual_end = end_idx
+
+        for hold_i in range(idx, end_idx + 1):
+            next_i = hold_i + 1
+            if next_i >= len(all_dates):
+                actual_end = hold_i
+                break
+            position_prob.iloc[hold_i] = row["prob"]
+            if stop_level is not None:
+                day_open = float(prices["Open"].iloc[next_i])
+                if float(prices["Low"].iloc[next_i]) <= stop_level:
+                    stop_exit.iloc[hold_i] = True
+                    stop_ret.iloc[hold_i] = (stop_level - day_open) / day_open
+                    actual_end = hold_i
+                    break
+        else:
+            actual_end = end_idx
+
+        in_position_until = all_dates[actual_end]
 
     df = prices[["Open", "Close"]].copy()
     pos_size = ((position_prob - 0.5) * 4).clip(0, 1.0)
     df["position_size"] = pos_size
 
-    # Execute at next-day open; return to that day's close
     df["exec_open"] = df["Open"].shift(-1)
     df["next_close"] = df["Close"].shift(-1)
     df = df.dropna(subset=["exec_open", "next_close"])
 
     df["trade_return"] = (df["next_close"] - df["exec_open"]) / df["exec_open"]
+
+    stop_mask = stop_exit.reindex(df.index).fillna(False).astype(bool)
+    df.loc[stop_mask, "trade_return"] = stop_ret.reindex(df.index)[stop_mask]
 
     prev_pos = df["position_size"].shift(1).fillna(0)
     df["cost"] = (df["position_size"] - prev_pos).abs() * cost_pct
