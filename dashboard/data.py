@@ -41,3 +41,44 @@ def get_last_run(db_path: str = DB_PATH) -> str | None:
             "SELECT date FROM daily_log ORDER BY date DESC LIMIT 1"
         ).fetchone()
     return row[0] if row else None
+
+
+@st.cache_data(ttl=60)
+def get_open_positions_enriched(db_path: str = DB_PATH) -> pd.DataFrame:
+    with sqlite3.connect(db_path) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT * FROM positions WHERE exit_date IS NULL ORDER BY open_date"
+        ).fetchall()
+    if not rows:
+        return pd.DataFrame()
+    df = pd.DataFrame([dict(r) for r in rows])
+    prices = _fetch_current_prices(tuple(df["ticker"].tolist()))
+    df["current_price"] = df["ticker"].map(prices)
+    df["pnl_pct"] = (df["current_price"] - df["entry_price"]) / df["entry_price"] * 100
+    df["stop_level"] = df["entry_price"] * 0.98
+    today = date.today().isoformat()
+    df["days_held"] = df["open_date"].apply(lambda d: int(np.busday_count(d, today)))
+    return df
+
+
+@st.cache_data(ttl=60)
+def _fetch_current_prices(tickers: tuple) -> dict:
+    result = {}
+    for ticker in tickers:
+        try:
+            hist = yf.Ticker(ticker).history(period="2d")
+            result[ticker] = float(hist["Close"].iloc[-1])
+        except Exception:
+            result[ticker] = None
+    return result
+
+
+@st.cache_data(ttl=300)
+def get_spy_prices(start_date: str, end_date: str) -> pd.DataFrame:
+    df = yf.Ticker("SPY").history(start=start_date, end=end_date)
+    if df.empty:
+        return pd.DataFrame(columns=["Date", "Close"])
+    out = df[["Close"]].reset_index()
+    out["Date"] = pd.to_datetime(out["Date"]).dt.date
+    return out[["Date", "Close"]]

@@ -86,3 +86,39 @@ def test_get_last_run_returns_none_when_no_log(tmp_path):
     get_last_run.clear()
 
     assert get_last_run(db_path=db) is None
+
+
+def test_get_open_positions_enriched(tmp_path, monkeypatch):
+    db = str(tmp_path / "test.db")
+    _seed_db(db)  # seeds 1 open position: AMD at $448
+
+    import pandas as _pd
+
+    class FakeTicker:
+        def history(self, period):
+            return _pd.DataFrame({"Close": [460.0, 455.0]})
+
+    monkeypatch.setattr("yfinance.Ticker", lambda ticker: FakeTicker())
+
+    from data import get_open_positions_enriched, _fetch_current_prices
+    get_open_positions_enriched.clear()
+    _fetch_current_prices.clear()
+    df = get_open_positions_enriched(db_path=db)
+
+    assert len(df) == 1
+    assert df.iloc[0]["ticker"] == "AMD"
+    assert df.iloc[0]["current_price"] == pytest.approx(455.0)
+    assert df.iloc[0]["pnl_pct"] == pytest.approx((455.0 - 448.0) / 448.0 * 100)
+    assert df.iloc[0]["stop_level"] == pytest.approx(448.0 * 0.98)
+    assert df.iloc[0]["days_held"] >= 0
+
+
+def test_get_open_positions_enriched_empty(tmp_path):
+    from db import init_db
+    from data import get_open_positions_enriched
+    db = str(tmp_path / "empty.db")
+    init_db(db)
+    get_open_positions_enriched.clear()
+
+    df = get_open_positions_enriched(db_path=db)
+    assert df.empty
