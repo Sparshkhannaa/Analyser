@@ -64,3 +64,20 @@ def test_engineer_features_lengths_match(synthetic_prices, synthetic_vix):
 def test_engineer_features_no_lookahead(synthetic_prices, synthetic_vix):
     X, y = engineer_features(synthetic_prices, synthetic_vix)
     assert X.index[-1] < synthetic_prices.index[-1]
+
+
+def test_engineer_features_inference_returns_one_row(synthetic_prices, synthetic_vix):
+    from features import engineer_features_inference, _FEATURE_COLS
+    row = engineer_features_inference(synthetic_prices, synthetic_vix)
+    assert row.shape == (1, len(_FEATURE_COLS)), f"Expected (1, 44), got {row.shape}"
+    assert list(row.columns) == _FEATURE_COLS
+    assert not row.isnull().values.any(), "Inference row contains NaN"
+
+
+def test_engineer_features_inference_index_after_training_data(synthetic_prices, synthetic_vix):
+    from features import engineer_features_inference
+    X_train, _ = engineer_features(synthetic_prices, synthetic_vix)
+    X_infer = engineer_features_inference(synthetic_prices, synthetic_vix)
+    assert X_infer.index[-1] >= X_train.index[-1], (
+        "Inference row should be at or after last training row"
+    )
