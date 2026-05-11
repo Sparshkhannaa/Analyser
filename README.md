@@ -1,369 +1,250 @@
-# S&P 500 Trading Strategy Analyzer
+# Stock Direction Analyser
 
-A professional quantitative trading system that uses Long Short-Term Memory (LSTM) neural networks to predict stock prices and optimize trading strategies through comprehensive backtesting.
+An algorithmic trading system that uses XGBoost to predict stock direction (up or down over the next 5 days) and scan multiple tickers daily for high-confidence signals.
 
-## Overview
+## What It Does
 
-This system analyzes the S&P 500 (SPY) using machine learning to predict future price movements and automatically evaluates multiple position sizing strategies to find the optimal risk-adjusted approach. It combines active trading signals with passive buy-and-hold allocation to maximize returns while controlling risk.
+Two modes:
+
+- **`main.py`** — Deep single-ticker analysis. Trains a walk-forward model, backtests the strategy, and generates charts comparing the strategy against buy & hold.
+- **`scan.py`** — Daily multi-ticker scanner. Loads cached models for up to 20 stocks, applies a 200-day SMA regime filter, and outputs a ranked signal table + CSV.
+
+## Quick Start
+
+```bash
+pip install -r requirements.txt
+
+# Deep analysis on a single stock
+python main.py --ticker NVDA
+
+# Scan 20 stocks for today's signals
+python scan.py
+
+# Scan specific tickers
+python scan.py --tickers NVDA TSLA AMD AAPL MSFT
+
+# Force retrain all cached models
+python scan.py --retrain
+```
 
 ## How It Works
 
-### 1. Data Collection
+### 1. Feature Engineering (44 features)
 
-The system fetches historical price data from Yahoo Finance for the specified time period (default: 2 years).
+Raw OHLCV data is transformed into 44 technical indicators:
 
-**What it retrieves:**
-- Open, High, Low, Close prices
-- Trading volume
-- Daily price movements
+| Category | Features |
+|----------|----------|
+| Lag | Previous 5 closing prices |
+| Moving Averages | SMA 7/14/21, EMA 12/26 |
+| Trend | MACD, MACD signal, MACD diff |
+| Momentum | RSI, Stochastic %K/%D, Williams %R, ROC 5/10 |
+| Volatility | Bollinger Bands (width, position), ATR, ATR 14, rolling vol |
+| Volume | Volume change, volume SMA 20, volume ratio, OBV, OBV slope |
+| Price | % change 1/5/10 days, momentum 5/10, high-low ratio |
+| Market | VIX, VIX 5-day change, ADX |
+| Calendar | Day of week |
+| Distance | Distance from 52-week high/low |
 
-### 2. Feature Engineering
+**Target:** Binary — will the stock close higher 5 days from now? (1 = yes, 0 = no)
 
-Raw price data is transformed into 31 technical indicators that capture different market dynamics:
+### 2. Walk-Forward Validation
 
-**Price-Based Features:**
-- **Lag features (lag_1 to lag_5)**: Previous 5 days of closing prices
-- **Moving averages**: 7-day, 14-day, and 21-day simple moving averages (SMA)
-- **Exponential moving averages**: 12-day and 26-day EMAs (more weight on recent prices)
+The model is trained using an expanding window to prevent look-ahead bias:
 
-**Momentum Indicators:**
-- **MACD (Moving Average Convergence Divergence)**: Shows trend direction and strength
-- **RSI (Relative Strength Index)**: Measures overbought/oversold conditions (0-100 scale)
-- **Price momentum**: 5-day and 10-day price changes
-
-**Volatility Measures:**
-- **Bollinger Bands**: Price channels showing standard deviation ranges
-- **ATR (Average True Range)**: Measures market volatility
-- **Rolling volatility**: 20-day standard deviation of returns
-
-**Volume Analysis:**
-- **Volume changes**: Day-over-day volume shifts
-- **Volume ratio**: Current volume vs 20-day average
-
-### 3. LSTM Model Training
-
-**What is LSTM?**
-Long Short-Term Memory networks are a type of neural network designed to remember patterns over time. Unlike traditional models that look at data points independently, LSTMs understand sequences and temporal dependencies.
-
-**Architecture:**
 ```
-Input: 60 days of historical data × 31 features
-  ↓
-Bidirectional LSTM Layer (128 units) → Processes sequences forward and backward
-  ↓
-Dropout (20%) → Prevents overfitting
-  ↓
-Bidirectional LSTM Layer (64 units)
-  ↓
-Dropout (20%)
-  ↓
-LSTM Layer (32 units)
-  ↓
-Dropout (20%)
-  ↓
-Dense Layer (16 units) → Pattern recognition
-  ↓
-Output Layer → Predicted next-day price
+Training window 1: Days 1–504  → Predict days 505–567
+Training window 2: Days 1–567  → Predict days 568–630
+Training window 3: Days 1–630  → Predict days 631–693
+...and so on
 ```
 
-**Training Process:**
-- **Data split**: 70% training, 30% testing
-- **Lookback window**: 60 days (the model sees 60 days to predict day 61)
-- **Scaling**: All features normalized to 0-1 range for better learning
-- **Early stopping**: Training stops if performance plateaus (prevents overfitting)
-- **Learning rate reduction**: Automatically adjusts when improvement slows
+Each prediction is made using only data that would have been available at that time. No future data leaks into training.
 
-**Why LSTM over traditional models?**
-- Captures time-series dependencies
-- Remembers long-term patterns
-- Handles non-linear relationships
-- Better for sequential data like stock prices
+### 3. XGBoost Classifier
 
-### 4. Position Sizing Strategies
+Key settings:
+- `n_estimators`: 500 (with early stopping at 30 rounds)
+- `max_depth`: 4
+- `learning_rate`: 0.05
+- `scale_pos_weight`: auto-computed to correct class imbalance
+- `eval_metric`: AUC
 
-The system tests 5 different approaches to determine how much capital to allocate:
+### 4. Position Sizing
 
-#### Pure Strategies (100% Active Trading)
+Position size scales with model confidence:
 
-**a) Binary (All-In or All-Out)**
-- If predicted return > 0.1%: Invest 100%
-- Otherwise: Stay in cash (0%)
-- Simplest approach, highest risk/reward
+```
+position_size = (probability - 0.5) × 4, capped at 1.0
+```
 
-**b) Fixed (Conservative)**
-- If signal is positive: Invest 50%
-- Otherwise: Cash
-- Reduces exposure compared to binary
+A 0.52 probability → 8% position. A 0.75 probability → 100% position.
 
-**c) Proportional (Confidence-Based)**
-- Position size = Predicted return strength
-- Higher confidence = Larger position
-- Example: 2% predicted gain = 2% allocation (capped at 100%)
+### 5. Backtesting
 
-**d) Kelly Criterion (Mathematically Optimal)**
-- Uses half-Kelly formula for safety
-- Position = (Predicted Edge × 2), capped at 50%
-- Based on expected value and probabilities
-- Optimal for long-term growth
+- Signals hold for 5 days (non-overlapping)
+- Executes at next-day open price
+- 0.1% transaction cost per trade
+- Benchmarked against buy & hold
 
-**e) Volatility-Adjusted (Risk-Aware)**
-- Reduces position size during high volatility
-- Increases position when market is calm
-- Position = (Median volatility / Current volatility) × Signal strength
+### 6. Regime Filter (scanner only)
 
-#### Hybrid Strategies (Blended Approach)
+Before emitting a signal, the scanner checks: `close > 200-day SMA`. If the stock is in a downtrend, the signal is suppressed regardless of model confidence. This keeps the strategy long-only and avoids catching falling knives.
 
-Combines active trading with passive buy-and-hold:
+### 7. Model Caching (scanner only)
 
-**30/70 Hybrid** (Recommended)
-- 30% allocated to active LSTM strategy
-- 70% always invested (buy-and-hold)
-- Captures most market upside while adding active alpha
+Models are saved to `models/` after training. On subsequent runs, cached models load in seconds instead of retraining (~2 min per ticker). Models auto-retrain after 7 days, or on demand with `--retrain`.
 
-**50/50 Hybrid**
-- Equal split between active and passive
-- Balanced risk/reward
+## CLI Reference
 
-**70/30 Hybrid**
-- More aggressive active trading
-- Lower passive allocation
+### `main.py`
 
-**Why Hybrids Work:**
-- Reduces drawdowns (maximum losses)
-- Captures major market moves
-- Improves Sharpe ratio (risk-adjusted returns)
-- More practical for real-world implementation
-
-### 5. Backtesting & Performance Metrics
-
-Each strategy is tested on historical data to evaluate performance:
-
-**Return Metrics:**
-- **Total Return**: Overall percentage gain/loss
-- **Buy & Hold Comparison**: How strategy performs vs. simply holding
-
-**Risk Metrics:**
-- **Sharpe Ratio**: Return per unit of risk (higher is better)
-  - < 1.0: Poor risk-adjusted returns
-  - 1.0-2.0: Good
-  - \> 2.0: Excellent
-- **Maximum Drawdown**: Largest peak-to-trough decline
-- **Win Rate**: Percentage of profitable trades
-
-### 6. Strategy Selection
-
-The system automatically:
-1. Ranks all strategies by Sharpe ratio
-2. Identifies which strategies beat buy-and-hold
-3. Selects the optimal approach
-4. Generates visualization charts
-5. Saves results with timestamps
-
-## Usage
-
-### Basic Usage (S&P 500 Analysis)
 ```bash
-python main.py
+python main.py --ticker SPY --period 1825 --capital 100000 --threshold 0.52
 ```
 
-This runs the complete analysis on SPY with default settings (2 years of data).
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--ticker` | `SPY` | Stock ticker |
+| `--period` | `1825` | Days of history (5 years) |
+| `--capital` | `100000` | Starting capital |
+| `--threshold` | `0.52` | Signal confidence cutoff |
 
-### Custom Analysis
+### `scan.py`
+
 ```bash
-python main.py --ticker AAPL --period 365
+python scan.py --tickers AAPL NVDA TSLA --threshold 0.55 --retrain
 ```
 
-**Parameters:**
-- `--ticker`: Stock symbol (default: SPY)
-- `--period`: Days of historical data (default: 730)
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--tickers` | 20 large-caps | Space-separated list of tickers |
+| `--period` | `1825` | Days of history |
+| `--threshold` | `0.52` | Signal confidence cutoff |
+| `--retrain` | off | Force retrain all models |
+
+**Default ticker list (20):**
+SPY, QQQ, AAPL, MSFT, NVDA, TSLA, AMZN, GOOGL, META, AMD, NFLX, JPM, V, UNH, XOM, BABA, COIN, PLTR, SMCI, MSTR
 
 ## Output
 
-### Console Output
+### `main.py` — Terminal
+
 ```
-======================================================================
-S&P 500 PREDICTION & STRATEGY ANALYSIS: SPY
-Period: 730 days (2.0 years)
-======================================================================
-
-Training LSTM model (lookback=60 steps)...
-Training sequences: (276, 60, 31)
-Test sequences: (84, 60, 31)
-LSTM Training Complete!
-   Final RMSE: 8.45, MAE: 6.32
-   Trained for 26 epochs
-
-Testing hybrid approaches with PROPORTIONAL strategy...
-
-================================================================================
-STRATEGY COMPARISON SUMMARY
-================================================================================
-Method                         Type                Return   Sharpe     Max DD
---------------------------------------------------------------------------------
-binary                         Pure                15.2%     1.45    -12.3%
-proportional                   Pure                 8.4%     1.82     -6.1%
-proportional_hybrid_70_30      30/70 split         22.5%     2.35     -8.2%  *BEST*
---------------------------------------------------------------------------------
-Buy & Hold (Benchmark)         100% Long           25.3%
-================================================================================
-
-BEST STRATEGY: PROPORTIONAL_HYBRID_70_30
-   Type: 30/70 split
-   Total Return: 22.5%
-   Sharpe Ratio: 2.35
+=================================================================
+  NVDA  |  1825 days of data
+=================================================================
+  Strategy Return              +24.16%
+  Buy & Hold Return          +1441.23%
+  Beats Buy & Hold                  NO
+  -------------------------------------------
+  Sharpe Ratio                      0.51
+  Sortino Ratio                     0.74
+  Calmar Ratio                      0.31
+  Max Drawdown                     -7.40%
+  Win Rate                         57.14%
+  Total Trades                        105
+=================================================================
 ```
 
-### Generated Files
+### `main.py` — Chart (saved to `charts/`)
 
-**Charts** (saved in `charts/` directory):
-- Filename format: `{TICKER}_{STRATEGY}_{TIMESTAMP}.png`
-- Example: `SPY_proportional_hybrid_70_30_20251017_143522.png`
+3-panel PNG:
+1. Equity curve: strategy vs buy & hold
+2. Walk-forward trade signals over time
+3. Top 20 feature importances
 
-**Chart Contents:**
-1. **Top Panel**: Equity curves comparing strategy vs. buy-and-hold
-2. **Bottom Panel**: Position sizing over time (how much capital deployed each day)
+### `scan.py` — Terminal
 
-## Key Concepts Explained
-
-### Look-Ahead Bias Prevention
-
-The system never uses future information to make past predictions:
-- **Training**: Uses only data available up to each prediction point
-- **Feature calculation**: Rolling windows prevent data leakage
-- **Walk-forward approach**: Each prediction uses only historical data
-
-### Short Selling
-
-When `allow_short=True` (default):
-- Negative predictions trigger short positions
-- Position size becomes negative (betting on price decline)
-- Example: -0.5 position = 50% short (profit when price drops)
-
-### Rebalancing
-
-In hybrid strategies:
-- Capital is split at the beginning
-- Active portion trades based on signals
-- Passive portion stays fully invested
-- No rebalancing between allocations (set-and-forget)
-
-## Performance Interpretation
-
-### When Strategies Outperform
-
-**Best scenarios:**
-- Sideways/choppy markets (lots of up/down movement)
-- High volatility periods
-- Market corrections (LSTM avoids drawdowns)
-
-### When Buy-and-Hold Wins
-
-**Challenging scenarios:**
-- Strong bull markets (missing upside when in cash)
-- Low volatility trends (fewer trading opportunities)
-- Consistently rising markets
-
-### Hybrid Advantage
-
-30/70 hybrids typically:
-- Capture 70-80% of bull market gains
-- Reduce drawdowns by 20-40%
-- Improve Sharpe ratios significantly
-- More realistic for actual trading
-
-## Technical Requirements
-
-**Python Packages:**
 ```
-yfinance          # Market data
-pandas, numpy     # Data manipulation
-tensorflow/keras  # LSTM neural networks
-scikit-learn      # Data preprocessing
-matplotlib        # Visualization
+=================================================================
+  SCANNER — 2026-05-11  |  threshold: 0.52  |  20 tickers
+=================================================================
+  Ticker     Prob  Signal   Regime
+  ------- ------  ------- -------
+  NVDA       0.74  LONG     YES
+  TSLA       0.69  LONG     YES
+  AMD        0.63  LONG     YES
+  AAPL       0.48  -        YES
+  META       0.38  -        NO
+=================================================================
+  3 long signals
+=================================================================
 ```
 
-**Installation:**
-```bash
-pip install yfinance pandas numpy tensorflow scikit-learn matplotlib
+### `scan.py` — CSV (saved to `signals/YYYY-MM-DD.csv`)
+
+```
+date,ticker,prob,signal,regime_ok,close,sma_200
+2026-05-11,NVDA,0.74,1,True,891.23,712.45
+2026-05-11,TSLA,0.69,1,True,174.56,201.12
 ```
 
-## Limitations & Considerations
+One file per day. Build up a backlog over time.
 
-1. **Transaction Costs**: Not included in backtest (would reduce returns)
-2. **Slippage**: Assumes perfect execution at closing prices
-3. **Market Impact**: Assumes trades don't affect prices
-4. **Survivorship Bias**: SPY has survived; doesn't include delisted stocks
-5. **Regime Changes**: Past patterns may not repeat
-6. **Overfitting Risk**: LSTM might learn noise instead of signal
+## Metrics Explained
+
+| Metric | What it means |
+|--------|--------------|
+| **Sharpe Ratio** | Return per unit of risk. Above 1.0 is good, above 2.0 is excellent |
+| **Sortino Ratio** | Like Sharpe but only penalises downside volatility |
+| **Calmar Ratio** | Annualised return divided by max drawdown |
+| **Max Drawdown** | Largest peak-to-trough loss during the period |
+| **Win Rate** | % of trade days with positive returns |
 
 ## File Structure
 
 ```
 Analyser/
-├── main.py                 # Core analysis system
-├── charts/                 # Generated visualizations
-│   └── *.png              # Timestamped chart files
-├── README.md              # This file
-└── requirements.txt       # Python dependencies
+├── main.py              # Single-ticker deep analysis
+├── scan.py              # Multi-ticker daily scanner
+├── features.py          # Feature engineering (44 features + inference)
+├── model.py             # XGBoost training, walk-forward, save/load
+├── backtest.py          # Simulation engine and metrics
+├── requirements.txt
+├── charts/              # PNG charts from main.py runs
+├── models/              # Cached XGBoost models (auto-generated)
+├── signals/             # Daily CSV outputs from scan.py (auto-generated)
+└── tests/
+    ├── conftest.py
+    ├── test_features.py
+    ├── test_model.py
+    ├── test_backtest.py
+    ├── test_integration.py
+    └── test_scan.py
 ```
 
-## System Workflow
+## Running Tests
 
-```
-1. Fetch Data (Yahoo Finance)
-         ↓
-2. Engineer Features (31 indicators)
-         ↓
-3. Train LSTM (60-day sequences)
-         ↓
-4. Generate Predictions
-         ↓
-5. Test Position Sizing (5 methods)
-         ↓
-6. Test Hybrid Approaches (3 allocations)
-         ↓
-7. Select Best Strategy (Sharpe ratio)
-         ↓
-8. Generate Report & Charts
+```bash
+pytest -v
 ```
 
-## Understanding Results
+37 tests covering feature engineering, model training, backtesting, scanner logic, model caching, and regime filtering.
 
-**Scenario 1: Strategy Beats B&H**
-```
-Strategy: 28% return, Sharpe: 2.1, Max DD: -8%
-Buy & Hold: 25% return
-```
-Interpretation: Strategy delivers higher returns with better risk management.
+## Requirements
 
-**Scenario 2: Strategy Underperforms**
-```
-Strategy: 12% return, Sharpe: 1.8, Max DD: -5%
-Buy & Hold: 30% return
-```
-Interpretation: Lower returns, but much lower risk (Sharpe is good). Suitable for risk-averse investors or during uncertain markets.
+- Python 3.11+
+- At least 2 years of price history per ticker (stocks launched less than ~2 years ago won't have enough data)
 
-**Scenario 3: Hybrid Optimal**
+```bash
+pip install -r requirements.txt
 ```
-Pure Strategy: 5% return
-30/70 Hybrid: 22% return
-Buy & Hold: 28% return
-```
-Interpretation: Hybrid captures most upside while reducing risk. Practical real-world approach.
 
-## Future Enhancements
+## Limitations
 
-Potential improvements:
-- Add transaction cost modeling
-- Implement stop-loss orders
-- Include multiple timeframes
-- Add market regime detection
-- Ensemble multiple models
-- Real-time trading integration
+- **Long-only**: No short selling
+- **US equities only**: Requires Yahoo Finance data
+- **New stocks unsupported**: Needs ~2 years of history minimum
+- **No intraday**: Daily bars only
+- **Transaction costs**: Fixed at 0.1% per trade (real costs may vary)
+- **Past performance**: Backtested results do not guarantee future returns
+
+## Roadmap
+
+- **Phase 3 (next):** Paper trading via Alpaca API with daily automated runs and Telegram alerts
+- **Phase 4:** Live trading on a real account with client reporting dashboard
 
 ---
 
-**Note**: This is a research and analysis tool. Past performance does not guarantee future results. Always conduct your own due diligence before making investment decisions.
-
-
-
+*Research tool only. Not financial advice. Always do your own due diligence.*
