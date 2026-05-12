@@ -3,10 +3,10 @@ import os
 import streamlit as st
 
 from data import get_last_run
-from pages.today import render_today
-from pages.positions import render_positions
-from pages.history import render_history
-from pages.equity import render_equity
+from views.today import render_today
+from views.positions import render_positions
+from views.history import render_history
+from views.equity import render_equity
 
 _CSS = """
 /* ── Reset & base ── */

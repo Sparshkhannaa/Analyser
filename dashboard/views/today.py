@@ -55,22 +55,26 @@ def _scanner_table(df: pd.DataFrame) -> None:
     display = df.copy()
     display["signal"] = display["signal"].apply(lambda x: "LONG" if x == 1 else "—")
     display["regime_ok"] = display["regime_ok"].apply(lambda x: "✓" if x else "✗")
-    display["near_earnings"] = display["near_earnings"].apply(
-        lambda x: "NEAR" if x else "—"
-    )
+    has_earnings = "near_earnings" in display.columns
+    if has_earnings:
+        display["near_earnings"] = display["near_earnings"].apply(
+            lambda x: "NEAR" if x else "—"
+        )
     display = display.rename(columns={
         "ticker": "Ticker", "prob": "Prob", "signal": "Signal",
         "regime_ok": "Regime", "near_earnings": "Earnings",
     })
-    cols = ["Ticker", "Prob", "Signal", "Regime", "Earnings"]
+    cols = ["Ticker", "Prob", "Signal", "Regime"] + (["Earnings"] if has_earnings else [])
     display["Prob"] = display["Prob"].round(3)
 
-    styled = (
+    style = (
         display[cols]
         .style
         .map(lambda v: "color: #a78bfa", subset=["Ticker"])
         .map(lambda v: "color: #10b981" if v == "LONG" else "color: #555", subset=["Signal"])
         .map(lambda v: "color: #10b981" if v == "✓" else "color: #ef4444", subset=["Regime"])
-        .map(lambda v: "color: #f59e0b" if v == "NEAR" else "color: #555", subset=["Earnings"])
     )
+    if has_earnings:
+        style = style.map(lambda v: "color: #f59e0b" if v == "NEAR" else "color: #555", subset=["Earnings"])
+    styled = style
     st.dataframe(styled, use_container_width=True, hide_index=True)

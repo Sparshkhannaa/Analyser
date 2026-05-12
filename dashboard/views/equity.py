@@ -7,20 +7,22 @@ from data import get_closed_trades, get_spy_prices
 
 def render_equity() -> None:
     trades = get_closed_trades()
-    if not trades.empty:
-        first_date = trades["open_date"].min()
-        st.markdown(
-            f'<p class="page-date">Cumulative Return since {first_date}</p>',
-            unsafe_allow_html=True,
-        )
 
     if len(trades) < 2:
+        first_date = trades["open_date"].min() if not trades.empty else None
+        since = f" since {first_date}" if first_date else ""
         st.markdown(
-            '<p style="color:#555;margin-top:40px;text-align:center">'
-            'Not enough trade history to plot an equity curve yet.</p>',
+            f'<p class="page-date">Cumulative Return{since}</p>',
             unsafe_allow_html=True,
         )
+        st.info("Not enough trade history to plot an equity curve yet.")
         return
+
+    first_date = trades["open_date"].min()
+    st.markdown(
+        f'<p class="page-date">Cumulative Return since {first_date}</p>',
+        unsafe_allow_html=True,
+    )
 
     niyo_series = _build_niyo_series(trades)
     start_date = str(trades["open_date"].min())
