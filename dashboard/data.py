@@ -76,7 +76,10 @@ def _fetch_current_prices(tickers: tuple) -> dict:
 
 @st.cache_data(ttl=300)
 def get_spy_prices(start_date: str, end_date: str) -> pd.DataFrame:
-    df = yf.Ticker("SPY").history(start=start_date, end=end_date)
+    try:
+        df = yf.Ticker("SPY").history(start=start_date, end=end_date)
+    except Exception:
+        return pd.DataFrame(columns=["Date", "Close"])
     if df.empty:
         return pd.DataFrame(columns=["Date", "Close"])
     out = df[["Close"]].reset_index()

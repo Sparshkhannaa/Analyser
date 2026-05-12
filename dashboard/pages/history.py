@@ -43,12 +43,12 @@ def render_history() -> None:
 
     styled = (
         display.style
-        .applymap(lambda v: "color: #a78bfa", subset=["Ticker"])
-        .applymap(
+        .map(lambda v: "color: #a78bfa", subset=["Ticker"])
+        .map(
             lambda v: "color: #10b981" if v.startswith("+") else "color: #ef4444",
             subset=["P&L %"],
         )
-        .applymap(
+        .map(
             lambda v: "color: #ef444488" if v == "stop_loss" else "color: #555",
             subset=["Reason"],
         )

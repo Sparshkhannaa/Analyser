@@ -37,13 +37,13 @@ def render_positions() -> None:
 
     styled = (
         display.style
-        .applymap(lambda v: "color: #a78bfa", subset=["Ticker"])
-        .applymap(
+        .map(lambda v: "color: #a78bfa", subset=["Ticker"])
+        .map(
             lambda v: "color: #10b981" if v.startswith("+") else "color: #ef4444"
             if v.startswith("-") else "color: #888",
             subset=["P&L %"],
         )
-        .applymap(lambda v: "color: #ef444466", subset=["Stop"])
+        .map(lambda v: "color: #ef444466", subset=["Stop"])
     )
     st.dataframe(styled, use_container_width=True, hide_index=True)
 

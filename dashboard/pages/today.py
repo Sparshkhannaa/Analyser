@@ -68,9 +68,9 @@ def _scanner_table(df: pd.DataFrame) -> None:
     styled = (
         display[cols]
         .style
-        .applymap(lambda v: "color: #a78bfa", subset=["Ticker"])
-        .applymap(lambda v: "color: #10b981" if v == "LONG" else "color: #555", subset=["Signal"])
-        .applymap(lambda v: "color: #10b981" if v == "✓" else "color: #ef4444", subset=["Regime"])
-        .applymap(lambda v: "color: #f59e0b" if v == "NEAR" else "color: #555", subset=["Earnings"])
+        .map(lambda v: "color: #a78bfa", subset=["Ticker"])
+        .map(lambda v: "color: #10b981" if v == "LONG" else "color: #555", subset=["Signal"])
+        .map(lambda v: "color: #10b981" if v == "✓" else "color: #ef4444", subset=["Regime"])
+        .map(lambda v: "color: #f59e0b" if v == "NEAR" else "color: #555", subset=["Earnings"])
     )
     st.dataframe(styled, use_container_width=True, hide_index=True)
