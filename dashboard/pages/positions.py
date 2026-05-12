@@ -33,7 +33,7 @@ def render_positions() -> None:
     display["P&L %"] = display["P&L %"].apply(
         lambda x: f"{x:+.2f}%" if pd.notna(x) else "—"
     )
-    display["Stop"] = display["Stop"].apply(lambda x: f"${x:,.2f}")
+    display["Stop"] = display["Stop"].apply(lambda x: f"${x:,.2f}" if pd.notna(x) else "—")
 
     styled = (
         display.style
