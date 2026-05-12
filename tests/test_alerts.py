@@ -4,9 +4,9 @@ import pandas as pd
 
 
 def test_send_telegram_returns_false_when_unconfigured(monkeypatch):
+    import alerts  # import before patching so load_dotenv() has already run
     monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     monkeypatch.delenv("TELEGRAM_CHAT_ID", raising=False)
-    import alerts
     assert alerts.send_telegram("test") is False
 
 
